@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import health, projects, templates
+from .api import health, media, projects, templates
 from .config import get_settings
 from .database import init_db
 
@@ -21,6 +21,8 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(templates.router)
 app.include_router(projects.router)
+app.include_router(media.router)
+
 
 
 @app.on_event("startup")
@@ -28,3 +30,8 @@ def startup() -> None:
     settings.media_storage_dir.mkdir(parents=True, exist_ok=True)
     settings.render_storage_dir.mkdir(parents=True, exist_ok=True)
     init_db()
+    from .database import SessionLocal
+    from .services.starter_templates import seed_starter_templates
+    with SessionLocal() as db:
+        seed_starter_templates(db)
+

@@ -195,32 +195,82 @@ function RankingPanel({ doc, update }: PanelProps) {
 
 /** Per-rank color overrides — editing one rank never changes others or the default. */
 function PerRankColors({ doc, update }: PanelProps) {
+  const [selectedRank, setSelectedRank] = useState<number | null>(null);
   const shown = Math.min(doc.ranking.count, 20);
   const ranks = doc.ranking.order === "descending"
     ? Array.from({ length: shown }, (_, i) => doc.ranking.count - i)
     : Array.from({ length: shown }, (_, i) => i + 1);
+
+  const activeRank = selectedRank ?? ranks[0];
+  const override = doc.ranking.per_rank_colors[String(activeRank)];
+  const activeColor = override ?? doc.ranking.default_color;
+
   return (
-    <div className="mb-3">
-      <span className="block text-xs font-medium text-neutral-400 mb-1">Per-rank colors</span>
-      <div className="flex flex-wrap gap-1.5">
+    <div className="mb-4 p-3 bg-neutral-900/60 border border-neutral-800 rounded-lg">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-neutral-300">Per-Rank Color Customization</span>
+        <span className="text-[11px] text-neutral-500">
+          {Object.keys(doc.ranking.per_rank_colors).length} custom override(s)
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 mb-3">
         {ranks.map((n) => {
-          const override = doc.ranking.per_rank_colors[String(n)];
+          const hasOverride = Boolean(doc.ranking.per_rank_colors[String(n)]);
+          const isSelected = activeRank === n;
+          const color = doc.ranking.per_rank_colors[String(n)] ?? doc.ranking.default_color;
           return (
-            <button key={n} title={`Rank ${n}${override ? " (override)" : " (default)"}`}
-                    onClick={() => update((d) => {
-                      // Toggle: click with existing override clears it; otherwise set from current effective color.
-                      if (d.ranking.per_rank_colors[String(n)]) delete d.ranking.per_rank_colors[String(n)];
-                      else d.ranking.per_rank_colors[String(n)] = d.ranking.per_rank_colors[String(n)] ?? d.ranking.default_color;
-                    })}
-                    className={`w-7 h-7 rounded text-[10px] font-bold border ${override ? "border-yellow-400" : "border-neutral-700"}`}
-                    style={{
-                      background: override ?? doc.ranking.default_color,
-                      color: (override ?? doc.ranking.default_color) === "#ffffff" ? "#000" : "#fff",
-                    }}>{n}</button>
+            <button
+              key={n}
+              type="button"
+              title={`Rank ${n}${hasOverride ? ` (${color})` : " (default)"}`}
+              onClick={() => setSelectedRank(n)}
+              className={`w-7 h-7 rounded text-[11px] font-bold border transition-all ${
+                isSelected
+                  ? "ring-2 ring-blue-500 scale-105 border-white"
+                  : hasOverride
+                  ? "border-amber-400 ring-1 ring-amber-400/40"
+                  : "border-neutral-700 hover:border-neutral-500"
+              }`}
+              style={{
+                background: color,
+                color: color.toLowerCase() === "#ffffff" ? "#000" : "#fff",
+              }}
+            >
+              {n}
+            </button>
           );
         })}
       </div>
-      <p className="text-[10px] text-neutral-600 mt-1">Click to add/clear an override. Overrides never change the shared default.</p>
+
+      <div className="pt-2 border-t border-neutral-800">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-xs font-medium text-neutral-300">
+            Rank #{activeRank} Color {override ? "(Custom)" : "(Inheriting default)"}
+          </span>
+          {override && (
+            <button
+              type="button"
+              onClick={() =>
+                update((d) => {
+                  delete d.ranking.per_rank_colors[String(activeRank)];
+                })
+              }
+              className="text-[11px] text-amber-400 hover:text-amber-300 underline"
+            >
+              Reset to default
+            </button>
+          )}
+        </div>
+        <ColorInput
+          value={activeColor}
+          onChange={(v) =>
+            update((d) => {
+              d.ranking.per_rank_colors[String(activeRank)] = v;
+            })
+          }
+        />
+      </div>
     </div>
   );
 }

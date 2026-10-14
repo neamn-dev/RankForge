@@ -31,11 +31,97 @@ def list_projects(db: Session = Depends(get_db)):
 
 @router.post("", status_code=201)
 def create_project(document: ProjectDocument, db: Session = Depends(get_db)):
-    row = ProjectRow(name=document.name, document=document.model_dump_json())
+    row = ProjectRow(
+        name=document.name,
+        template_id=document.template_id,
+        document=document.model_dump_json(),
+    )
     db.add(row)
     db.commit()
     db.refresh(row)
     return {"id": row.id}
+
+
+@router.post("/from-template/{template_id}", status_code=201)
+def create_project_from_template(template_id: str, db: Session = Depends(get_db)):
+    import uuid
+    from ..models import TemplateRow
+    from ..schemas import TemplateDocument
+    from ..schemas.project import Clip, ClipRanking, ExportSettings, Timeline, Track
+
+    template_row = db.get(TemplateRow, template_id)
+    if template_row is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    template_doc = TemplateDocument.model_validate_json(template_row.document)
+
+    count = template_doc.ranking.count
+    is_desc = template_doc.ranking.order == "descending"
+    positions = [count - i for i in range(count)] if is_desc else list(range(1, count + 1))
+
+    video_clips = []
+    default_clip_ticks = 9000  # 3 seconds default at 3000 ticks/sec
+    timeline_current_ticks = 0
+
+    for pos in positions:
+        clip_id = str(uuid.uuid4())
+        label_text = template_doc.labels.texts.get(str(pos), "")
+        clip = Clip(
+            id=clip_id,
+            asset_id=None,
+            source_in_ticks=0,
+            source_out_ticks=default_clip_ticks,
+            timeline_start_ticks=timeline_current_ticks,
+            duration_ticks=default_clip_ticks,
+            ranking=ClipRanking(position=pos, label=label_text),
+        )
+        video_clips.append(clip)
+        timeline_current_ticks += default_clip_ticks
+
+    video_track = Track(
+        id=str(uuid.uuid4()),
+        type="video",
+        name="Main Ranking",
+        order=0,
+        clips=video_clips,
+    )
+    audio_track = Track(
+        id=str(uuid.uuid4()),
+        type="audio",
+        name="Background Audio",
+        order=1,
+        clips=[],
+    )
+
+    doc = ProjectDocument(
+        name=f"My {template_row.name} Video",
+        template_id=template_id,
+        timeline=Timeline(
+            width=template_doc.canvas.width,
+            height=template_doc.canvas.height,
+            fps=template_doc.canvas.fps,
+            ticks_per_second=3000,
+            duration_ticks=timeline_current_ticks,
+        ),
+        assets=[],
+        tracks=[video_track, audio_track],
+        export=ExportSettings(
+            width=template_doc.canvas.width,
+            height=template_doc.canvas.height,
+            fps=template_doc.canvas.fps,
+        ),
+    )
+
+    row = ProjectRow(
+        name=doc.name,
+        template_id=template_id,
+        document=doc.model_dump_json(),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"id": row.id}
+
 
 
 @router.get("/{project_id}")

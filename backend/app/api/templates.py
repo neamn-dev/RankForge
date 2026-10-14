@@ -32,19 +32,31 @@ def list_templates(db: Session = Depends(get_db)):
     ]
 
 
+@router.post("/seed")
+def seed_templates(db: Session = Depends(get_db)):
+    from ..services.starter_templates import seed_starter_templates
+    added = seed_starter_templates(db)
+    return {"added": added}
+
+
 @router.post("", status_code=201)
 def create_template(document: TemplateDocument, db: Session = Depends(get_db)):
     row = svc.create_template(db, document)
     return {"id": row.id}
 
 
+
 @router.get("/{template_id}")
 def get_template(template_id: str, db: Session = Depends(get_db)):
-    row = svc.get_template(db, template_id)
+    try:
+        row = svc.get_template(db, template_id)
+    except svc.TemplateNotFoundError:
+        raise HTTPException(status_code=404, detail="Template not found")
     return {
         "id": row.id, "name": row.name, "isDefault": row.is_default,
         "document": _doc_or_404(row).model_dump(by_alias=True),
     }
+
 
 
 @router.put("/{template_id}")

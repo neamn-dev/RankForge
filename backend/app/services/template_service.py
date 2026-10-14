@@ -77,9 +77,14 @@ def duplicate_template(db: Session, template_id: str, new_name: str | None = Non
 def rename_template(db: Session, template_id: str, new_name: str) -> TemplateRow:
     row = get_template(db, template_id)
     row.name = new_name
+    doc = TemplateDocument.model_validate_json(row.document)
+    doc.name = new_name
+    row.document = doc.model_dump_json()
+    row.updated_at = _now()
     db.commit()
     db.refresh(row)
     return row
+
 
 
 def delete_template(db: Session, template_id: str) -> None:
